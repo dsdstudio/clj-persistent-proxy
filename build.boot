@@ -1,5 +1,5 @@
 (set-env!
- :source-paths #{"src"}
+ :source-paths #{"src", "test"}
  :resource-paths #{"resources"}
  :dependencies '[[org.clojure/clojure "1.9.0"]
                  [org.danielsz/system "0.4.1"]
@@ -14,15 +14,30 @@
                  [boot-environ "1.1.0"]
                  
                  [com.taoensso/carmine "2.16.0"]
-                 [cider/cider-nrepl "0.15.1"]
+                 [cider/cider-nrepl "0.16.0-SNAPSHOT"]
                  [org.slf4j/slf4j-simple "1.7.25"]
+
+                 [ring/ring-mock "0.3.2" :scope "test"]
+                 
+                 [adzerk/boot-test "1.2.0" :scope "test"]
                  [adzerk/boot-reload "0.5.2" :scope "test"]])
 
+
+
 (require
+ '[adzerk.boot-test :refer :all]
  '[environ.boot :refer [environ]]
  '[system.boot :refer [system run]]
  '[system.repl :refer [go reset]]
  '[opproxy.systems :refer [dev-system]])
+
+(deftask watch-test []
+  (comp
+   (environ :env {:http-port "3001" :repl-port "9888"})
+   (watch :verbose true)
+   (repl :server true)
+   (speak)
+   (test)))
 
 (deftask dev []
   (comp
