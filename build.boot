@@ -22,8 +22,6 @@
                  [adzerk/boot-test "1.2.0" :scope "test"]
                  [adzerk/boot-reload "0.5.2" :scope "test"]])
 
-
-
 (require
  '[adzerk.boot-test :refer :all]
  '[environ.boot :refer [environ]]
@@ -31,9 +29,11 @@
  '[system.repl :refer [go reset]]
  '[opproxy.systems :refer [dev-system]])
 
+(def default-config {:http-port "3001" :repl-port "9888"})
+
 (deftask watch-test []
   (comp
-   (environ :env {:http-port "3001" :repl-port "9888"})
+   (environ :env default-config)
    (watch :verbose true)
    (repl :server true)
    (speak)
@@ -41,7 +41,7 @@
 
 (deftask dev []
   (comp
-   (environ :env {:http-port "3001" :repl-port "9888"})
+   (environ :env default-config)
    (watch :verbose true)
    (system :sys #'dev-system :auto true :files ["handler.clj"])
    (repl :server true)))
