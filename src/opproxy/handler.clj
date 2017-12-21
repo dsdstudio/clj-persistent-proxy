@@ -6,6 +6,7 @@
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-body]]
             [clj-http.client :as hc]
+            [environ.core :refer [env]]
             [taoensso.carmine :as car :refer (wcar)]))
 
 (def conn {:pool {} :spec {:uri "redis://127.0.0.1:6379"}})
@@ -13,23 +14,22 @@
 
 (defn- cache-hit?
   "해당 키가 캐시에 존재하는지 확인한다."
-  [key]
+  [^String key]
   (= 1 (wcar* (car/exists key))))
 
 (defn- write-cache
   "cache에 데이터를 기록한다. "
-  [key data]
+  [^String key data]
   (println "write-cache::" key)
   (wcar*
    (car/set key (pr-str data))))
 
 (defn- cache-data
   "캐시에 있는 데이터를 조회한다. "
-  [key]
+  [^String key]
   (println "cache-hit::" key)
   (read-string (wcar*
                 (car/get key))))
-  
 
 (defn md5 [^String s]
   (let [algorithm (java.security.MessageDigest/getInstance "MD5")
@@ -52,11 +52,12 @@
 (defn wrap-proxy-request [handler proxy-url]
   (fn [request]
     (let [request-method (:request-method request)
+          request-cookie (:cookies request)
           query-params (:query-params request)
           request-url (str proxy-url
                            (:uri request)
-                           "?"
-                           (clojure.string/join "&" (map (fn [[k v]] (str k "=" v)) query-params)))
+                           (if (empty? query-params) ""
+                               (str "?" (clojure.string/join "&" (map (fn [[k v]] (str k "=" v)) query-params)))))
           form-params (:form-params request)
           cache-key (md5 (str proxy-url
                               "\n"
@@ -68,17 +69,19 @@
       (cond
         (cache-hit? cache-key) (cache-data cache-key)
         :else (let [response (cond
-                (= :get request-method) (hc/get request-url)
-                (= :post request-method) (hc/post request-url {:form-params form-params})
-                (= :put request-method) (hc/put request-url {:form-params form-params})
-                (= :delete request-method) (hc/delete request-url))]
-                (write-cache cache-key response)
-                response)))))
+                (= :get request-method) (hc/get request-url {:cookies request-cookie})
+                (= :post request-method) (hc/post request-url {:form-params form-params :cookies request-cookie})
+                (= :put request-method) (hc/put request-url {:form-params form-params :cookies request-cookie})
+                (= :delete request-method) (hc/delete request-url {:cookies request-cookie}))
+                    converted-request (assoc-in response [:cookies] (into {} (map (fn [[k v]] [k (dissoc v :version :discard)]) (:cookies response))))]
+                (write-cache cache-key converted-request)
+                converted-request)))))
 
 ;; threading first macro 는 마지막 인자부터 소비한다. 미들웨어의 순서에 주의 할것.. 
 (def app
   (-> app-routes
-      (wrap-proxy-request "http://localhost:9090")
+      (wrap-proxy-request (env :proxy-server))
       (wrap-json-response {:keywords? true})
       (wrap-json-body {:keywords? true})
-      (wrap-defaults (assoc-in site-defaults [:security :anti-forgery] false))))
+      (wrap-defaults (-> site-defaults
+                         (assoc-in [:security :anti-forgery] false)))))

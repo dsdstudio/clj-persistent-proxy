@@ -29,7 +29,7 @@
  '[system.repl :refer [go reset]]
  '[opproxy.systems :refer [dev-system]])
 
-(def default-config {:http-port "3001" :repl-port "9888"})
+(def default-config {:http-port "3001" :repl-port "9888" :proxy-server "http://localhost:9090"})
 
 (deftask watch-test []
   (comp
