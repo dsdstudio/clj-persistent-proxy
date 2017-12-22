@@ -13,28 +13,42 @@
 (defmacro wcar* [& body] `(car/wcar conn ~@body))
 
 (defn- cache-hit?
-  "해당 키가 캐시에 존재하는지 확인한다."
   [^String key]
   (= 1 (wcar* (car/exists key))))
 
 (defn- write-cache
-  "cache에 데이터를 기록한다. "
   [^String key data]
   (println "write-cache::" key)
   (wcar*
    (car/set key (pr-str data))))
 
 (defn- cache-data
-  "캐시에 있는 데이터를 조회한다. "
   [^String key]
   (println "cache-hit::" key)
   (read-string (wcar*
                 (car/get key))))
 
-(defn md5 [^String s]
+(defn- md5 [^String s]
   (let [algorithm (java.security.MessageDigest/getInstance "MD5")
         raw (.digest algorithm (.getBytes s))]
     (format "%032x" (java.math.BigInteger. 1 raw))))
+
+(defn- to-query-param [query-params]
+  (str "?" (clojure.string/join "&" (map (fn [[k v]] (str k "=" v)) query-params))))
+
+(defn- proxy-response
+  [request-method request-url request-cookie form-params]
+  (cond
+    (= :get request-method) (hc/get request-url {:cookies request-cookie})
+    (= :post request-method) (hc/post request-url {:form-params form-params :cookies request-cookie})
+    (= :put request-method) (hc/put request-url {:form-params form-params :cookies request-cookie})
+    (= :delete request-method) (hc/delete request-url {:cookies request-cookie})))
+
+(defn- to-ring-response
+  "ring middleware에서 cookie 값에 없는 키를 삽입하면 assert 에러가 남.
+  그래서 httpclient에서 나온 response중 :version, :discard 키를 제거하도록 처리"
+  [response]
+  (assoc-in response [:cookies] (into {} (map (fn [[k v]] [k (dissoc v :version :discard)]) (:cookies response)))))
 
 (defroutes app-routes
   (GET "/api/keys" []
@@ -56,8 +70,7 @@
           query-params (:query-params request)
           request-url (str proxy-url
                            (:uri request)
-                           (if (empty? query-params) ""
-                               (str "?" (clojure.string/join "&" (map (fn [[k v]] (str k "=" v)) query-params)))))
+                           (if (empty? query-params) "" (to-query-param query-params)))
           form-params (:form-params request)
           cache-key (md5 (str proxy-url
                               "\n"
@@ -66,16 +79,11 @@
                               request-method
                               "\n"
                               (pr-str form-params)))]
-      (cond
-        (cache-hit? cache-key) (cache-data cache-key)
-        :else (let [response (cond
-                (= :get request-method) (hc/get request-url {:cookies request-cookie})
-                (= :post request-method) (hc/post request-url {:form-params form-params :cookies request-cookie})
-                (= :put request-method) (hc/put request-url {:form-params form-params :cookies request-cookie})
-                (= :delete request-method) (hc/delete request-url {:cookies request-cookie}))
-                    converted-request (assoc-in response [:cookies] (into {} (map (fn [[k v]] [k (dissoc v :version :discard)]) (:cookies response))))]
-                (write-cache cache-key converted-request)
-                converted-request)))))
+      (if (cache-hit? cache-key) (cache-data cache-key)
+          (let [response (proxy-response request-method request-url request-cookie form-params)
+                converted-response (to-ring-response response)]
+            (write-cache cache-key converted-response)
+            converted-response)))))
 
 ;; threading first macro 는 마지막 인자부터 소비한다. 미들웨어의 순서에 주의 할것.. 
 (def app
