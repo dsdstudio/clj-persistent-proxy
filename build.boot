@@ -29,7 +29,16 @@
  '[system.repl :refer [go reset]]
  '[opproxy.systems :refer [dev-system]])
 
-(def default-config {:http-port "3001" :repl-port "9888" :proxy-server "http://localhost:9090"})
+(task-options!
+ pom {:project 'opproxy
+      :version "0.1.0"}
+ jar {:manifest {} :main 'opproxy.core}
+ aot {:namespace #{'opproxy.core}})
+
+(def default-config {:http-port "3001"
+                     :repl-port "9888"
+                     :proxy-server "http://localhost:9090"
+                     :redis-url "redis://127.0.0.1:6379"})
 
 (deftask watch-test []
   (comp
@@ -49,6 +58,7 @@
 (deftask build []
   (comp
    (aot)
-   (pom)
    (uber)
-   (jar)))
+   (jar :file "opproxy-server.jar")
+   (sift :include #{#"opproxy-server.jar"})
+   (target)))

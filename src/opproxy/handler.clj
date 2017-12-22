@@ -9,7 +9,7 @@
             [environ.core :refer [env]]
             [taoensso.carmine :as car :refer (wcar)]))
 
-(def conn {:pool {} :spec {:uri "redis://127.0.0.1:6379"}})
+(def conn {:pool {} :spec {:uri (env :redis-url)}})
 (defmacro wcar* [& body] `(car/wcar conn ~@body))
 
 (defn- cache-hit?
