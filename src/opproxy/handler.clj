@@ -56,6 +56,28 @@
                    (car/keys "*"))))
   (route/not-found "Not Found"))
 
+(def static-assets
+  (map #(str "/**/" %) ["*.js"
+                        "*.css"
+                        "*.html"
+                        "*.htm"
+                        "*.mp4"
+                        "*.m4v"
+                        "*.aac"
+                        "*.mp3"
+                        "*.mp4"
+                        "*.*map"
+                        "*.gif"
+                        "*.jpg"
+                        "*.jpeg"
+                        "*.png"]))
+
+(def matcher (org.springframework.util.AntPathMatcher.))
+
+(defn resource-url? [url]
+  (some #(-> matcher
+             (.match % url)) static-assets))
+
 ;; cache key -> url:method:params
 ;; Proxy request caching middleware
 ;; TODO URL Pattern filter 
@@ -82,7 +104,7 @@
       (if (cache-hit? cache-key) (cache-data cache-key)
           (let [response (proxy-response request-method request-url request-cookie form-params)
                 converted-response (to-ring-response response)]
-            (write-cache cache-key converted-response)
+            (if-not (resource-url? request-url) (write-cache cache-key converted-response))
             converted-response)))))
 
 ;; threading first macro 는 마지막 인자부터 소비한다. 미들웨어의 순서에 주의 할것.. 

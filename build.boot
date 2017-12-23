@@ -12,7 +12,10 @@
                  
                  [environ "1.1.0"]
                  [boot-environ "1.1.0"]
+
                  
+                 [org.springframework/spring-core "5.0.2.RELEASE"]
+
                  [com.taoensso/carmine "2.16.0"]
                  [cider/cider-nrepl "0.16.0-SNAPSHOT"]
                  [org.slf4j/slf4j-simple "1.7.25"]
